@@ -1,8 +1,9 @@
 # Java DPI Engine
 
 Dependency-free Java port of the packet analyzer. It reads a PCAP file, parses
-Ethernet/IPv4/TCP/UDP packets, extracts TLS SNI or HTTP Host values, classifies
-traffic by application, applies blocking rules, and writes a filtered PCAP.
+Ethernet/IPv4/IPv6/TCP/UDP packets, extracts TLS SNI or HTTP Host values,
+classifies traffic by application, applies blocking rules, and writes a
+filtered PCAP.
 
 The runtime pipeline uses 2 load balancers and 4 fast-path processors:
 
@@ -18,6 +19,7 @@ packets from the same connection keep one worker-owned flow state.
 ```text
 Packet_analyzer/
 ├── src/main/java/com/packetanalyzer/dpi/   Java source
+├── run                                     Backend run helper
 ├── build-java.sh                           Java build script
 ├── test_dpi.pcap                           Sample input PCAP
 ├── output.pcap                             Existing sample/output PCAP
@@ -67,8 +69,13 @@ a detailed result table showing blocked versus allowed traffic.
 Start the Java API first:
 
 ```bash
-./build-java.sh
-java -cp build/dpi-engine.jar com.packetanalyzer.dpi.DashboardServer
+./run backend
+```
+
+If port `8080` is busy, pass another port:
+
+```bash
+./run backend 8081
 ```
 
 The API runs at:
@@ -87,7 +94,8 @@ npm run dev
 
 Then open the local URL printed by Vite. The dashboard calls
 `POST /api/analyze` and sends selected blocked apps plus derived domains and
-source IPs to the Java backend, so app clicks apply app, domain, and source-IP
-rules together. Use the upload button in the top bar to choose a `.pcap` file.
-The frontend sends it to `POST /api/upload`, and the Java backend saves it
-under `build/uploads/` before running analysis on the uploaded capture.
+destination IPs to the Java backend. CLI `--block-ip` still blocks by source IP,
+but dashboard app clicks avoid source-IP blocking because one client source can
+produce traffic for many apps. Use the upload button in the top bar to choose a
+`.pcap` file. The frontend sends it to `POST /api/upload`, and the Java backend
+saves it under `build/uploads/` before running analysis on the uploaded capture.

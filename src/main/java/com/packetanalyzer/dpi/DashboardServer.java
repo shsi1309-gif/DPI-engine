@@ -40,7 +40,7 @@ public final class DashboardServer {
         server.start();
 
         System.out.println("Dashboard API running at http://127.0.0.1:" + port);
-        System.out.println("POST /api/analyze with {\"blockedApps\":[\"YouTube\"],\"blockedDomains\":[\"youtube.com\"],\"blockedIps\":[\"192.168.1.100\"]}");
+        System.out.println("POST /api/analyze with {\"blockedApps\":[\"YouTube\"],\"blockedDomains\":[\"youtube.com\"],\"blockedDestinationIps\":[\"142.250.185.110\"]}");
         System.out.println("POST /api/upload with raw PCAP bytes and X-File-Name header");
     }
 
@@ -130,6 +130,11 @@ public final class DashboardServer {
                 rules.blockIp(ip);
             }
         }
+        for (String ip : blockRequest.blockedDestinationIps()) {
+            if (!ip.isBlank()) {
+                rules.blockDestinationIp(ip);
+            }
+        }
 
         DpiEngine engine = new DpiEngine(rules);
         DpiStats stats = engine.process(inputFile, DEFAULT_OUTPUT);
@@ -175,8 +180,8 @@ public final class DashboardServer {
                 flow.appType.displayName(),
                 categoryFor(flow.appType),
                 PcapUtil.protocolToString(flow.tuple.protocol),
-                PcapUtil.ipToString(flow.tuple.srcIp),
-                PcapUtil.ipToString(flow.tuple.dstIp),
+                flow.tuple.srcIp,
+                flow.tuple.dstIp,
                 flow.tuple.dstPort,
                 flow.packets,
                 flow.bytes,
@@ -215,7 +220,8 @@ public final class DashboardServer {
         return new BlockRequest(
             parseStringArray(body, "blockedApps", false),
             parseStringArray(body, "blockedDomains", true),
-            parseStringArray(body, "blockedIps", false)
+            parseStringArray(body, "blockedIps", false),
+            parseStringArray(body, "blockedDestinationIps", false)
         );
     }
 
@@ -293,10 +299,11 @@ public final class DashboardServer {
     private record BlockRequest(
         List<String> blockedApps,
         List<String> blockedDomains,
-        List<String> blockedIps
+        List<String> blockedIps,
+        List<String> blockedDestinationIps
     ) {
         static BlockRequest empty() {
-            return new BlockRequest(List.of(), List.of(), List.of());
+            return new BlockRequest(List.of(), List.of(), List.of(), List.of());
         }
     }
 

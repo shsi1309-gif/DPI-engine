@@ -5,8 +5,9 @@ final class ParsedPacket {
     long timestampUsec;
 
     boolean hasIp;
-    int srcIp;
-    int dstIp;
+    int ipVersion;
+    String srcIp = "";
+    String dstIp = "";
     int protocol;
     int ttl;
 

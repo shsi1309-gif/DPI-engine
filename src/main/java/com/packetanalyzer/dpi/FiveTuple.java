@@ -3,13 +3,13 @@ package com.packetanalyzer.dpi;
 import java.util.Objects;
 
 final class FiveTuple {
-    final int srcIp;
-    final int dstIp;
+    final String srcIp;
+    final String dstIp;
     final int srcPort;
     final int dstPort;
     final int protocol;
 
-    FiveTuple(int srcIp, int dstIp, int srcPort, int dstPort, int protocol) {
+    FiveTuple(String srcIp, String dstIp, int srcPort, int dstPort, int protocol) {
         this.srcIp = srcIp;
         this.dstIp = dstIp;
         this.srcPort = srcPort;
@@ -21,8 +21,8 @@ final class FiveTuple {
     public boolean equals(Object other) {
         if (this == other) return true;
         if (!(other instanceof FiveTuple tuple)) return false;
-        return srcIp == tuple.srcIp
-            && dstIp == tuple.dstIp
+        return Objects.equals(srcIp, tuple.srcIp)
+            && Objects.equals(dstIp, tuple.dstIp)
             && srcPort == tuple.srcPort
             && dstPort == tuple.dstPort
             && protocol == tuple.protocol;
@@ -35,8 +35,8 @@ final class FiveTuple {
 
     @Override
     public String toString() {
-        return PcapUtil.ipToString(srcIp) + ":" + srcPort
-            + " -> " + PcapUtil.ipToString(dstIp) + ":" + dstPort
+        return srcIp + ":" + srcPort
+            + " -> " + dstIp + ":" + dstPort
             + " (" + PcapUtil.protocolToString(protocol) + ")";
     }
 }

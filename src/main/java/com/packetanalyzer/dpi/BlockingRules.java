@@ -8,13 +8,19 @@ import java.util.Locale;
 import java.util.Set;
 
 final class BlockingRules {
-    private final Set<Integer> blockedIps = new HashSet<>();
+    private final Set<String> blockedIps = new HashSet<>();
+    private final Set<String> blockedDestinationIps = new HashSet<>();
     private final EnumSet<AppType> blockedApps = EnumSet.noneOf(AppType.class);
     private final List<String> blockedDomains = new ArrayList<>();
 
     void blockIp(String ip) {
-        blockedIps.add(PcapUtil.parseIp(ip));
+        blockedIps.add(PcapUtil.normalizeIp(ip));
         System.out.println("[Rules] Blocked IP: " + ip);
+    }
+
+    void blockDestinationIp(String ip) {
+        blockedDestinationIps.add(PcapUtil.normalizeIp(ip));
+        System.out.println("[Rules] Blocked destination IP: " + ip);
     }
 
     void blockApp(String appName) {
@@ -31,8 +37,9 @@ final class BlockingRules {
         System.out.println("[Rules] Blocked domain: " + domain);
     }
 
-    boolean isBlocked(int srcIp, AppType app, String domain) {
+    boolean isBlocked(String srcIp, String dstIp, AppType app, String domain) {
         if (blockedIps.contains(srcIp)) return true;
+        if (blockedDestinationIps.contains(dstIp)) return true;
         if (blockedApps.contains(app)) return true;
 
         String lowerDomain = domain == null ? "" : domain.toLowerCase(Locale.ROOT);

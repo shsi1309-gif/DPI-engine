@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+set -eu
+
+ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+case "${1:-}" in
+  backend)
+    cd "$ROOT_DIR"
+    ./build-java.sh
+    exec java -cp build/dpi-engine.jar com.packetanalyzer.dpi.DashboardServer "${2:-8080}"
+    ;;
+  *)
+    echo "Usage: ./run backend [port]"
+    exit 1
+    ;;
+esac

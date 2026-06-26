@@ -47,10 +47,10 @@ final class FastPathProcessor implements Runnable {
         PacketClassifier.classify(job.raw, job.parsed, flow);
 
         if (!flow.blocked) {
-            flow.blocked = rules.isBlocked(job.tuple.srcIp, flow.appType, flow.sni);
+            flow.blocked = rules.isBlocked(job.tuple.srcIp, job.tuple.dstIp, flow.appType, flow.sni);
             if (flow.blocked) {
                 System.out.println("[FP-" + fpId + " BLOCKED] "
-                    + PcapUtil.ipToString(job.parsed.srcIp) + " -> " + PcapUtil.ipToString(job.parsed.dstIp)
+                    + job.parsed.srcIp + " -> " + job.parsed.dstIp
                     + " (" + flow.appType.displayName()
                     + (flow.sni.isEmpty() ? "" : ": " + flow.sni)
                     + ")");

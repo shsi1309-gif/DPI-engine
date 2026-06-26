@@ -1,12 +1,17 @@
 package com.packetanalyzer.dpi;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Arrays;
+import java.util.Locale;
 
 final class PcapUtil {
     static final int PROTOCOL_TCP = 6;
     static final int PROTOCOL_UDP = 17;
     static final int ETHERTYPE_IPV4 = 0x0800;
+    static final int ETHERTYPE_IPV6 = 0x86dd;
 
     private PcapUtil() {
     }
@@ -23,28 +28,29 @@ final class PcapUtil {
         buffer.putInt((int) value);
     }
 
-    static String ipToString(int ip) {
-        return (ip & 0xff) + "."
-            + ((ip >>> 8) & 0xff) + "."
-            + ((ip >>> 16) & 0xff) + "."
-            + ((ip >>> 24) & 0xff);
+    static String ipv4ToString(byte[] data, int offset) {
+        return (data[offset] & 0xff) + "."
+            + (data[offset + 1] & 0xff) + "."
+            + (data[offset + 2] & 0xff) + "."
+            + (data[offset + 3] & 0xff);
     }
 
-    static int parseIp(String ip) {
-        String[] parts = ip.split("\\.");
-        if (parts.length != 4) {
-            throw new IllegalArgumentException("Invalid IPv4 address: " + ip);
+    static String ipv6ToString(byte[] data, int offset) {
+        byte[] address = Arrays.copyOfRange(data, offset, offset + 16);
+        try {
+            return InetAddress.getByAddress(address).getHostAddress().toLowerCase(Locale.ROOT);
+        } catch (UnknownHostException ex) {
+            throw new IllegalArgumentException("Invalid IPv6 address bytes", ex);
         }
+    }
 
-        int result = 0;
-        for (int i = 0; i < parts.length; i++) {
-            int octet = Integer.parseInt(parts[i]);
-            if (octet < 0 || octet > 255) {
-                throw new IllegalArgumentException("Invalid IPv4 address: " + ip);
-            }
-            result |= octet << (i * 8);
+    static String normalizeIp(String ip) {
+        try {
+            InetAddress address = InetAddress.getByName(ip);
+            return address.getHostAddress().toLowerCase(Locale.ROOT);
+        } catch (UnknownHostException ex) {
+            throw new IllegalArgumentException("Invalid IP address: " + ip, ex);
         }
-        return result;
     }
 
     static String protocolToString(int protocol) {
