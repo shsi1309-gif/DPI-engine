@@ -57,3 +57,37 @@ Supported options:
 --block-app <app>      Block an application such as YouTube, Facebook, GitHub
 --block-domain <dom>   Block domains by substring match
 ```
+
+## React Dashboard
+
+The React frontend lives in `frontend/`. It provides a dashboard with detected
+applications/websites, click-to-block app selection, traffic summary cards, and
+a detailed result table showing blocked versus allowed traffic.
+
+Start the Java API first:
+
+```bash
+./build-java.sh
+java -cp build/dpi-engine.jar com.packetanalyzer.dpi.DashboardServer
+```
+
+The API runs at:
+
+```text
+http://127.0.0.1:8080
+```
+
+Then start the frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Then open the local URL printed by Vite. The dashboard calls
+`POST /api/analyze` and sends selected blocked apps plus derived domains and
+source IPs to the Java backend, so app clicks apply app, domain, and source-IP
+rules together. Use the upload button in the top bar to choose a `.pcap` file.
+The frontend sends it to `POST /api/upload`, and the Java backend saves it
+under `build/uploads/` before running analysis on the uploaded capture.

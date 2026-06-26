@@ -1,1 +1,4 @@
 build/
+filtered.pcap
+frontend/dist/
+frontend/node_modules/
