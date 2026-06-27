@@ -44,7 +44,18 @@ final class FastPathProcessor implements Runnable {
         flow.packets++;
         flow.bytes += job.raw.data.length;
 
+        if (job.parsed.hasUdp && (job.parsed.srcPort == 53 || job.parsed.dstPort == 53)) {
+            for (DnsNameExtractor.DnsRecord record : DnsNameExtractor.extract(
+                job.raw.data,
+                job.parsed.payloadOffset,
+                job.parsed.payloadLength
+            )) {
+                stats.dnsNamesByIp.putIfAbsent(record.ip(), record.domain());
+            }
+        }
+
         PacketClassifier.classify(job.raw, job.parsed, flow);
+        applyDnsNameFallback(flow);
 
         if (!flow.blocked) {
             flow.blocked = rules.isBlocked(job.tuple.srcIp, job.tuple.dstIp, flow.appType, flow.sni);
@@ -66,5 +77,22 @@ final class FastPathProcessor implements Runnable {
             stats.forwarded.increment();
             outputQueue.push(new ProcessedPacket(job.sequence, job.raw, true));
         }
+    }
+
+    private void applyDnsNameFallback(Flow flow) {
+        if (flow.sni != null && !flow.sni.isBlank()) {
+            return;
+        }
+
+        String domain = stats.dnsNamesByIp.getOrDefault(flow.tuple.dstIp, "");
+        if (domain.isBlank()) {
+            domain = stats.dnsNamesByIp.getOrDefault(flow.tuple.srcIp, "");
+        }
+        if (domain.isBlank()) {
+            return;
+        }
+
+        flow.sni = domain;
+        flow.appType = AppType.fromDomain(domain);
     }
 }

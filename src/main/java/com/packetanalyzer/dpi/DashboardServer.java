@@ -14,8 +14,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -35,6 +37,7 @@ public final class DashboardServer {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
         server.createContext("/api/analyze", DashboardServer::handleAnalyze);
         server.createContext("/api/upload", DashboardServer::handleUpload);
+        server.createContext("/api/download", DashboardServer::handleDownload);
         server.createContext("/api/health", DashboardServer::handleHealth);
         server.setExecutor(null);
         server.start();
@@ -42,6 +45,7 @@ public final class DashboardServer {
         System.out.println("Dashboard API running at http://127.0.0.1:" + port);
         System.out.println("POST /api/analyze with {\"blockedApps\":[\"YouTube\"],\"blockedDomains\":[\"youtube.com\"],\"blockedDestinationIps\":[\"142.250.185.110\"]}");
         System.out.println("POST /api/upload with raw PCAP bytes and X-File-Name header");
+        System.out.println("GET /api/download to download the latest filtered PCAP");
     }
 
     private static void handleHealth(HttpExchange exchange) throws IOException {
@@ -104,6 +108,31 @@ public final class DashboardServer {
             sendJson(exchange, 200, response);
         } catch (Exception ex) {
             sendJson(exchange, 500, "{\"error\":\"" + escapeJson(ex.getMessage()) + "\"}");
+        }
+    }
+
+    private static void handleDownload(HttpExchange exchange) throws IOException {
+        if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendNoContent(exchange);
+            return;
+        }
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, "{\"error\":\"Use GET\"}");
+            return;
+        }
+        if (!Files.exists(DEFAULT_OUTPUT) || Files.size(DEFAULT_OUTPUT) == 0) {
+            sendJson(exchange, 404, "{\"error\":\"No filtered PCAP is available yet. Run analysis first.\"}");
+            return;
+        }
+
+        Headers headers = exchange.getResponseHeaders();
+        addCorsHeaders(headers);
+        headers.set("Content-Type", "application/vnd.tcpdump.pcap");
+        headers.set("Content-Disposition", "attachment; filename=\"filtered-dashboard.pcap\"");
+        headers.set("Content-Length", Long.toString(Files.size(DEFAULT_OUTPUT)));
+        exchange.sendResponseHeaders(200, Files.size(DEFAULT_OUTPUT));
+        try (OutputStream output = exchange.getResponseBody()) {
+            Files.copy(DEFAULT_OUTPUT, output);
         }
     }
 
@@ -170,28 +199,112 @@ public final class DashboardServer {
     }
 
     private static List<WebsiteRow> buildWebsiteRows(DpiStats stats) {
-        List<WebsiteRow> rows = new ArrayList<>();
+        Map<String, WebsiteAccumulator> rows = new LinkedHashMap<>();
         for (Flow flow : stats.flows.values()) {
-            if (flow.sni == null || flow.sni.isBlank()) {
+            String domain = flow.sni;
+            if (domain == null || domain.isBlank()) {
+                domain = stats.dnsNamesByIp.getOrDefault(flow.tuple.dstIp, "");
+            }
+            if (domain.isBlank()) {
+                domain = stats.dnsNamesByIp.getOrDefault(flow.tuple.srcIp, "");
+            }
+            if (domain.isBlank()) {
                 continue;
             }
-            rows.add(new WebsiteRow(
-                flow.sni,
-                flow.appType.displayName(),
-                categoryFor(flow.appType),
+
+            AppType appType = flow.appType == AppType.UNKNOWN
+                || flow.appType == AppType.HTTP
+                || flow.appType == AppType.HTTPS
+                || flow.appType == AppType.DNS
+                ? AppType.fromDomain(domain)
+                : flow.appType;
+            String rowDomain = domain;
+            String key = rowDomain + "|" + appType.displayName() + "|" + PcapUtil.protocolToString(flow.tuple.protocol);
+            WebsiteAccumulator row = rows.computeIfAbsent(key, ignored -> new WebsiteAccumulator(
+                rowDomain,
+                appType.displayName(),
+                categoryFor(appType),
                 PcapUtil.protocolToString(flow.tuple.protocol),
                 flow.tuple.srcIp,
                 flow.tuple.dstIp,
                 flow.tuple.dstPort,
-                flow.packets,
-                flow.bytes,
-                1,
-                riskFor(flow.appType),
-                flow.blocked
+                riskFor(appType)
             ));
+            row.add(flow);
         }
-        rows.sort(Comparator.comparing(WebsiteRow::domain));
-        return rows;
+        List<WebsiteRow> websiteRows = rows.values().stream()
+            .map(WebsiteAccumulator::toRow)
+            .sorted(Comparator.comparing(WebsiteRow::domain))
+            .toList();
+        return websiteRows;
+    }
+
+    private static final class WebsiteAccumulator {
+        private final String domain;
+        private final String app;
+        private final String category;
+        private final String protocol;
+        private final String risk;
+        private String sourceIp;
+        private String destinationIp;
+        private int port;
+        private long packets;
+        private long bytes;
+        private long flows;
+        private boolean blocked;
+
+        WebsiteAccumulator(
+            String domain,
+            String app,
+            String category,
+            String protocol,
+            String sourceIp,
+            String destinationIp,
+            int port,
+            String risk
+        ) {
+            this.domain = domain;
+            this.app = app;
+            this.category = category;
+            this.protocol = protocol;
+            this.sourceIp = sourceIp;
+            this.destinationIp = destinationIp;
+            this.port = port;
+            this.risk = risk;
+        }
+
+        void add(Flow flow) {
+            packets += flow.packets;
+            bytes += flow.bytes;
+            flows++;
+            blocked = blocked || flow.blocked;
+            if (!isRepresentativeServicePort(port) && isRepresentativeServicePort(flow.tuple.dstPort)) {
+                sourceIp = flow.tuple.srcIp;
+                destinationIp = flow.tuple.dstIp;
+                port = flow.tuple.dstPort;
+            }
+        }
+
+        WebsiteRow toRow() {
+            return new WebsiteRow(
+                domain,
+                app,
+                category,
+                protocol,
+                sourceIp,
+                destinationIp,
+                port,
+                packets,
+                bytes,
+                flows,
+                risk,
+                blocked
+            );
+        }
+
+        private static boolean isRepresentativeServicePort(int port) {
+            return port == 80 || port == 443 || port == 993 || port == 995 || port == 5222 || port == 5223;
+        }
     }
 
     private static String categoryFor(AppType appType) {
@@ -268,6 +381,7 @@ public final class DashboardServer {
         headers.set("Access-Control-Allow-Origin", "*");
         headers.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
         headers.set("Access-Control-Allow-Headers", "Content-Type, X-File-Name");
+        headers.set("Access-Control-Expose-Headers", "Content-Disposition");
     }
 
     private static String sanitizeFileName(String rawName) {
@@ -322,8 +436,9 @@ public final class DashboardServer {
         boolean blocked
     ) {
         String toJson() {
+            String id = domain + "|" + protocol + "|" + destinationIp + "|" + port;
             return "{"
-                + "\"id\":\"" + escapeJson(domain) + "\","
+                + "\"id\":\"" + escapeJson(id) + "\","
                 + "\"domain\":\"" + escapeJson(domain) + "\","
                 + "\"app\":\"" + escapeJson(app) + "\","
                 + "\"category\":\"" + escapeJson(category) + "\","

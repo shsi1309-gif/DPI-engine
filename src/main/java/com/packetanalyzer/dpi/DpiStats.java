@@ -10,6 +10,7 @@ final class DpiStats {
     final LongAdder forwarded = new LongAdder();
     final LongAdder dropped = new LongAdder();
     final ConcurrentHashMap<FiveTuple, Flow> flows = new ConcurrentHashMap<>();
+    final ConcurrentHashMap<String, String> dnsNamesByIp = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<AppType, LongAdder> appStats = new ConcurrentHashMap<>();
 
     void incrementApp(AppType appType) {

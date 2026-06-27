@@ -57,7 +57,7 @@ enum AppType {
         String lower = domain.toLowerCase(Locale.ROOT);
 
         if (containsAny(lower, "youtube", "ytimg", "yt3.ggpht") || domainMatches(lower, "youtu.be")) return YOUTUBE;
-        if (containsAny(lower, "google", "gstatic", "googleapis", "ggpht", "gvt1")) return GOOGLE;
+        if (containsAny(lower, "google", "gstatic", "googleapis", "ggpht", "gvt1", "gmail")) return GOOGLE;
         if (containsAny(lower, "facebook", "fbcdn", "fbsbx") || domainMatchesAny(lower, "fb.com", "meta.com")) return FACEBOOK;
         if (containsAny(lower, "instagram", "cdninstagram")) return INSTAGRAM;
         if (lower.contains("whatsapp") || domainMatches(lower, "wa.me")) return WHATSAPP;

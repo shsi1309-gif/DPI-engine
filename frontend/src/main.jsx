@@ -124,6 +124,39 @@ function App() {
     analyzeTraffic(buildBlockRequest([]));
   }
 
+  async function exportFilteredPcap() {
+    if (!outputFile || loading) {
+      return;
+    }
+
+    setError('');
+    try {
+      const response = await fetch(`${API_BASE}/api/download`);
+      if (!response.ok) {
+        let message = 'Unable to download filtered PCAP';
+        try {
+          const payload = await response.json();
+          message = payload.error || message;
+        } catch {
+          // Keep the generic message if the backend did not return JSON.
+        }
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'filtered-dashboard.pcap';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message || 'Unable to download filtered PCAP');
+    }
+  }
+
   async function uploadPcap(file) {
     if (!file) {
       return;
@@ -192,7 +225,12 @@ function App() {
           >
             <Upload size={18} />
           </button>
-          <button className="primary-button" title={outputFile ? `Latest output: ${outputFile}` : 'Run analysis to create output'}>
+          <button
+            className="primary-button"
+            title={outputFile ? `Latest output: ${outputFile}` : 'Run analysis to create output'}
+            onClick={exportFilteredPcap}
+            disabled={loading || !outputFile}
+          >
             <Download size={18} />
             Export filtered PCAP
           </button>
